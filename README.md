@@ -2,8 +2,6 @@
 
 Play international chess against AI opponents powered by local large language models (LLMs).
 
-![LLM Chess](docs/screenshot.png)
-
 ## Features
 
 - **Interactive chess board** with move highlighting and last-move indicators
