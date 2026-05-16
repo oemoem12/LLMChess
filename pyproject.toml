@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llmchess"
+version = "1.0.0"
+description = "Play international chess against AI opponents powered by local LLMs"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    {name = "oemoem12"}
+]
+keywords = ["chess", "ai", "llm", "ollama", "llama.cpp", "lmstudio", "pyqt6", "board-game"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment :: Board Games",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "PyQt6>=6.5.0",
+    "python-chess>=1.10.0",
+    "httpx>=0.25.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/oemoem12/LLMChess"
+Repository = "https://github.com/oemoem12/LLMChess"
+Issues = "https://github.com/oemoem12/LLMChess/issues"
+
+[project.scripts]
+llmchess = "chess_app:main"
+
+[tool.setuptools.packages.find]
+include = ["chess_app*"]
+
+[tool.setuptools.package-data]
+chess_app = ["*.py"]
