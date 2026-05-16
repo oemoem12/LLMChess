@@ -40,10 +40,16 @@ Repository = "https://github.com/oemoem12/LLMChess"
 Issues = "https://github.com/oemoem12/LLMChess/issues"
 
 [project.scripts]
-llmchess = "chess_app:main"
+llmchess = "llmchess:main"
 
 [tool.setuptools.packages.find]
 include = ["chess_app*"]
 
+[project.optional-dependencies]
+dev = ["build", "twine"]
+
 [tool.setuptools.package-data]
 chess_app = ["*.py"]
+
+[tool.setuptools]
+py-modules = ["llmchess"]
