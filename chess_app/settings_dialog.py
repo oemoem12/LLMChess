@@ -1,12 +1,11 @@
-import chess
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QComboBox, QLineEdit, QSpinBox,
     QDoubleSpinBox, QDialogButtonBox, QVBoxLayout, QGroupBox,
-    QHBoxLayout, QPushButton, QLabel,
+    QHBoxLayout, QPushButton, QLabel, QTabWidget, QWidget,
 )
 from PyQt6.QtCore import Qt
 
-from chess_app.llm_connector import LLMConfig
+from chess_app.llm_connector import LLMConfig, PERSONAS
 
 
 PRESET_CONFIGS = {
@@ -45,28 +44,25 @@ PRESET_CONFIGS = {
 }
 
 
-class SettingsDialog(QDialog):
-    def __init__(self, current_config: LLMConfig, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("LLM Connection Settings")
-        self.setMinimumWidth(480)
-        self._current_config = current_config
-        self._setup_ui()
+class LLMConfigWidget(QWidget):
+    """单侧 LLM 配置面板（白方或黑方）"""
 
-    def _setup_ui(self):
+    def __init__(self, config: LLMConfig, side_name: str = "LLM"):
+        super().__init__()
+        self._side_name = side_name
         layout = QVBoxLayout(self)
 
+        # 预设
         preset_group = QGroupBox("Preset Configuration")
         preset_layout = QVBoxLayout(preset_group)
-
         self.preset_combo = QComboBox()
         for name in PRESET_CONFIGS:
             self.preset_combo.addItem(name)
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
         preset_layout.addWidget(self.preset_combo)
-
         layout.addWidget(preset_group)
 
+        # 连接设置
         settings_group = QGroupBox("Connection Settings")
         form = QFormLayout(settings_group)
 
@@ -94,25 +90,15 @@ class SettingsDialog(QDialog):
         self.max_tokens_spin.setRange(16, 4096)
         form.addRow("Max Tokens:", self.max_tokens_spin)
 
+        # 人设
+        self.persona_combo = QComboBox()
+        for name in PERSONAS:
+            self.persona_combo.addItem(name.title(), name)
+        form.addRow("AI Persona:", self.persona_combo)
+
         layout.addWidget(settings_group)
 
-        test_layout = QHBoxLayout()
-        self.test_btn = QPushButton("Test Connection")
-        self.test_status = QLabel("")
-        self.test_status.setWordWrap(True)
-        test_layout.addWidget(self.test_btn)
-        test_layout.addWidget(self.test_status, 1)
-        layout.addLayout(test_layout)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok |
-            QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-        self._apply_config(self._current_config)
+        self._apply_config(config)
 
     def _apply_config(self, config: LLMConfig):
         self.provider_combo.setCurrentText(config.provider)
@@ -121,6 +107,13 @@ class SettingsDialog(QDialog):
         self.api_key_edit.setText(config.api_key)
         self.temperature_spin.setValue(config.temperature)
         self.max_tokens_spin.setValue(config.max_tokens)
+        # 人设
+        if config.persona and config.persona in PERSONAS:
+            idx = self.persona_combo.findData(config.persona)
+            if idx >= 0:
+                self.persona_combo.setCurrentIndex(idx)
+        else:
+            self.persona_combo.setCurrentIndex(0)  # default
 
     def _on_preset_changed(self, name: str):
         if name in PRESET_CONFIGS and name != "Custom":
@@ -143,10 +136,83 @@ class SettingsDialog(QDialog):
             api_key=self.api_key_edit.text().strip(),
             temperature=self.temperature_spin.value(),
             max_tokens=self.max_tokens_spin.value(),
+            persona=self.persona_combo.currentData() or "default",
         )
 
+
+class SettingsDialog(QDialog):
+    def __init__(self, current_config: LLMConfig, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("LLM Connection Settings")
+        self.setMinimumWidth(560)
+        self.setMinimumHeight(560)
+        self._current_config = current_config
+        self.config_black = LLMConfig()  # 默认黑方配置
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Tab 切换白方/黑方配置（AI vs AI 模式用）
+        self.tabs = QTabWidget()
+
+        # 白方 Tab
+        self.white_widget = LLMConfigWidget(self._current_config, "White")
+        self.tabs.addTab(self.white_widget, "⬜ White (Player 1)")
+
+        # 黑方 Tab
+        self.black_widget = LLMConfigWidget(self.config_black, "Black")
+        self.tabs.addTab(self.black_widget, "⬛ Black (Player 2)")
+
+        layout.addWidget(self.tabs)
+
+        # 测试
+        test_group = QGroupBox("Connection Test")
+        test_layout = QVBoxLayout(test_group)
+
+        test_btn_layout = QHBoxLayout()
+        self.test_btn = QPushButton("Test Current Tab")
+        self.test_btn.clicked.connect(self._on_test_current)
+        test_btn_layout.addWidget(self.test_btn)
+        test_layout.addLayout(test_btn_layout)
+
+        self.test_status = QLabel("")
+        self.test_status.setWordWrap(True)
+        self.test_status.setMinimumHeight(40)
+        test_layout.addWidget(self.test_status)
+
+        layout.addWidget(test_group)
+
+        # 按钮
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _on_test_current(self):
+        config = self.get_config()
+        from chess_app.llm_connector import LLMConnector
+        connector = LLMConnector(config)
+        try:
+            success, message = connector.test_connection()
+            self.set_test_status(success, message)
+        except Exception as e:
+            self.set_test_status(False, str(e))
+        finally:
+            connector.close()
+
+    def get_config(self) -> LLMConfig:
+        """获取当前 Tab 的配置"""
+        if self.tabs.currentIndex() == 0:
+            return self.white_widget.get_config()
+        return self.black_widget.get_config()
+
     def set_test_callback(self, callback):
-        self.test_btn.clicked.connect(callback)
+        """兼容旧 API（已内置 _on_test_current，可忽略）"""
+        pass
 
     def set_test_status(self, success: bool, message: str):
         color = "#4CAF50" if success else "#F44336"
