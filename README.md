@@ -1,111 +1,153 @@
-# LLMChess 训练 Pipeline 测试
+# LLM Chess ♟️🤖
 
-本目录包含用于验证 LLM 训练 pipeline 的测试脚本和示例数据。
+> Play chess against local LLMs, or watch two AIs battle each other — all in a beautiful dark-themed GUI.
 
-## 目录结构
+[![PyPI version](https://badge.fury.io/py/llmchess.svg)](https://pypi.org/project/llmchess/)
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/oemoem12/LLMChess)](https://github.com/oemoem12/LLMChess/releases)
 
-```
-LLMChess/
-├── tests/
-│   ├── __init__.py
-│   └── test_pipeline.py    # 完整训练 pipeline 测试
-├── data/
-│   └── sample_train.json   # 示例训练数据
-└── README.md               # 本文档
-```
+LLM Chess is a desktop application that lets you play international chess against AI opponents powered by **local large language models**. No cloud, no API keys, no GPU required — just a local LLM server (Ollama, llama.cpp, LM Studio, or any OpenAI-compatible API).
 
-## 快速开始
+## ✨ Features
 
-### 运行测试
+### 🎮 Game Modes
+- **Human vs AI** — Classic mode. Play as White or Black against an LLM.
+- **AI vs AI** — Watch two LLMs play each other with configurable speed control (pause/resume/step).
+- Each side can use a **different model, different backend, different temperature**.
 
-在 LLMChess 目录下执行：
+### 💭 AI Thinking Display
+- See the AI's **reasoning process** for every move
+- Color-coded by side (blue for White, pink for Black)
+- Parses `Reasoning:` and `Move:` format with fallback handling
 
+### 🎭 AI Personas
+Choose the AI's "personality" — affects its playing style and reasoning tone:
+- **Default** — Calm, professional engine
+- **Aggressive** — Loves attacks and sacrifices
+- **Defensive** — Values king safety and solid positions
+- **Creative** — Unusual openings and tactical surprises
+- **Teacher** — Explains reasoning clearly, great for learning
+
+### 🎨 UI Highlights
+- Dark Catppuccin-themed PyQt6 interface
+- Click-to-move with legal-move highlighting
+- Last-move markers (yellow) and check indicators (red)
+- Full move history in SAN notation
+- Real-time FEN display
+- Promotion dialog (queen/rook/bishop/knight)
+- Undo moves
+
+## 📦 Installation
+
+### Option 1: pip (recommended)
 ```bash
-python tests/test_pipeline.py
+pip install llmchess
+llmchess
 ```
 
-这将运行以下测试：
-
-1. **模型前向传播测试** - 验证 GPT2 模型的 forward pass
-2. **数据处理测试** - 验证文本清洗和 BPE 分词
-3. **训练步骤测试** - 验证单个训练步骤（forward、backward、optimizer step）
-4. **文本生成测试** - 验证贪婪解码生成
-5. **完整 Pipeline 测试** - 验证多步训练循环
-
-### 准备训练数据
-
-使用示例数据或准备您自己的训练数据：
-
+Or run as a module:
 ```bash
-# 示例数据位于
-data/sample_train.json
-
-# 数据格式
-[
-  {"text": "您的训练文本1"},
-  {"text": "您的训练文本2"}
-]
+python -m llmchess
 ```
 
-### 开始训练
+### Option 2: DEB package (Ubuntu/Debian)
+```bash
+sudo dpkg -i llmchess_1.5.0_all.deb
+```
+The launcher will auto-install missing Python dependencies (PyQt6, python-chess, httpx).
 
-使用示例数据训练模型：
-
-```python
-from models.gpt2 import GPT2, GPTConfig
-from data import TextDataset, BPETokenizer, collate_fn
-from scripts import Trainer
-from torch.utils.data import DataLoader
-
-config = GPTConfig(
-    vocab_size=10000,
-    hidden_size=256,
-    num_layers=4,
-    num_heads=4
-)
-
-model = GPT2(config)
-tokenizer = BPETokenizer()
-dataset = TextDataset("data/sample_train.json", tokenizer)
-dataloader = DataLoader(dataset, batch_size=2, collate_fn=collate_fn)
-
-trainer = Trainer(model, dataloader)
-trainer.train(num_epochs=10)
+### Option 3: From source
+```bash
+git clone https://github.com/oemoem12/LLMChess.git
+cd LLMChess
+pip install -e .
+python main.py
 ```
 
-## 测试说明
+## 🔧 Setup LLM Backend
 
-测试脚本使用随机生成的数据进行快速验证，确保所有核心组件正常工作：
+LLM Chess is **backend-agnostic** — it speaks OpenAI-compatible HTTP API. Pick any one:
 
-- 模型初始化和前向传播
-- 损失计算和反向传播
-- 优化器更新
-- 文本生成解码
-
-所有测试都可以在 CPU 上快速运行，不需要 GPU。
-
-## 自定义测试
-
-要测试自定义模型配置：
-
-```python
-config = GPTConfig(
-    vocab_size=5000,      # 词汇表大小
-    hidden_size=128,      # 隐藏层维度
-    num_layers=2,        # Transformer 层数
-    num_heads=4,         # 注意力头数
-    max_seq_length=512    # 最大序列长度
-)
-model = GPT2(config)
+### Ollama (easiest)
+```bash
+# Install from https://ollama.com
+ollama pull qwen2.5:7b
+ollama serve  # default: http://localhost:11434
 ```
 
-## 依赖
+### llama.cpp
+```bash
+./llama-server -m model.gguf --port 8080
+```
 
-测试脚本依赖以下模块：
+### LM Studio
+Open LM Studio → Developer tab → Start Local Server (default: `http://localhost:1234`)
 
-- `torch` - PyTorch 深度学习框架
-- `models.gpt2` - GPT2 模型实现
-- `data` - 数据处理模块
-- `scripts` - 训练脚本和工具
+## 🚀 Quick Start
 
-确保这些模块在您的 Python 环境中可用。
+1. **Start your LLM server** (Ollama/llama.cpp/LM Studio)
+2. **Launch LLM Chess**: `llmchess`
+3. **Open Settings** → select your backend → click **Test Connection**
+4. **Choose a model** in the connection settings
+5. **Pick a game mode** (Human vs AI / AI vs AI) and a persona
+6. **Click a piece → click target square** to move
+7. **Watch the AI Thinking panel** to see your opponent's reasoning
+
+## 🎬 Screenshots
+
+```
+┌─────────────────────┬──────────────────┐
+│  Game Mode          │  Move History    │
+│  [Human vs AI ▼]    │  1. e4 e5        │
+│  [White (first) ▼]  │  2. Nf3 Nc6      │
+│                     │  3. Bb5 a6       │
+│  ♔ ♕ ♖ ♗ ♘ ♙        │  ...             │
+│  ─────────────────  │                  │
+│  Chess Board        │  AI Thinking     │
+│  (8×8)              │  ━━━ White AI ━━ │
+│  ─────────────────  │  Move: e2e4      │
+│  [New Game] [⚙ Set] │  Reasoning:      │
+│                     │  Classical king  │
+└─────────────────────┴──────────────────┘
+```
+
+## 🛠️ Tech Stack
+
+- **[PyQt6](https://www.riverbankcomputing.com/software/pyqt/)** — Cross-platform GUI
+- **[python-chess](https://python-chess.readthedocs.io/)** — Chess rules, FEN/PGN handling
+- **[httpx](https://www.python-httpx.org/)** — OpenAI-compatible HTTP client
+- **[setuptools](https://setuptools.pypa.io/)** + **Trusted Publisher** — Zero-token PyPI release
+
+## 📐 Architecture
+
+```
+chess_app/
+├── __init__.py            # Package entry, version, main()
+├── __main__.py            # python -m chess_app support
+├── main.py                # GUI entry point
+├── board_widget.py        # Chess board renderer (PyQt6)
+├── game_controller.py     # Main window + game flow + AI vs AI logic
+├── llm_connector.py       # OpenAI-compatible LLM client + persona prompts
+└── settings_dialog.py     # Tabbed config UI (White/Black sides)
+```
+
+## 🤝 Contributing
+
+PRs welcome! Some ideas:
+- [ ] Save/load PGN files
+- [ ] Tournament mode (round-robin between N models)
+- [ ] Stockfish-LLM hybrid (use Stockfish for blunders, LLM for variety)
+- [ ] Post-game analysis with LLM commentary
+- [ ] Online multiplayer via WebSocket
+
+## 📜 License
+
+[MIT](LICENSE) — do whatever you want, just don't blame me if the AI hangs your king.
+
+## 🔗 Links
+
+- **PyPI**: https://pypi.org/project/llmchess/
+- **GitHub**: https://github.com/oemoem12/LLMChess
+- **Issues**: https://github.com/oemoem12/LLMChess/issues
+- **中文 README**: [README_zh.md](README_zh.md)
