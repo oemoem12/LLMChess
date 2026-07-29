@@ -1,0 +1,37 @@
+# Build artifacts
+*.pyc
+__pycache__/
+*.egg-info/
+build/
+dist/
+deb_pkg/
+data/
+docs/
+outputs/
+models/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# CI / git
+.github/
+.git/
+.gitignore
+.gitattributes
+
+# Test data
+tests/
+
+# Python files (the npm package uses pip to install llmchess)
+*.py
+pyproject.toml
+main.py
+llmchess.py
+
+# Local config
+*.log
+.env

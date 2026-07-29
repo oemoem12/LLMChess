@@ -1,0 +1,52 @@
+{
+  "name": "llmchess",
+  "version": "1.5.0",
+  "description": "Play chess against local LLMs, or watch two AIs battle each other. A Python/PyQt6 desktop chess GUI powered by local large language models.",
+  "main": "index.js",
+  "bin": {
+    "llmchess": "bin/llmchess.js"
+  },
+  "scripts": {
+    "start": "node bin/llmchess.js",
+    "test": "node test/smoke.test.js"
+  },
+  "keywords": [
+    "chess",
+    "llm",
+    "ai",
+    "ollama",
+    "llama",
+    "openai",
+    "pyqt",
+    "desktop",
+    "gui"
+  ],
+  "author": "catodm",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oemoem12/LLMChess.git"
+  },
+  "bugs": {
+    "url": "https://github.com/oemoem12/LLMChess/issues"
+  },
+  "homepage": "https://github.com/oemoem12/LLMChess#readme",
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "index.js",
+    "bin/",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ]
+}

@@ -58,10 +58,18 @@ LLM 下棋有天然优势：它能理解局面、能"解释"着法、甚至能�
 pip install llmchess
 ```
 
+或者用 npm（适合前端/Node 开发者）：
+
+```bash
+npm install -g llmchess
+llmchess
+# npm 包会在首次运行时自动 pip install llmchess
+```
+
 或者 Ubuntu/Debian 用户可以直接下载 DEB 包：
 
 ```bash
-sudo dpkg -i llmchess_1.0.0_all.deb
+sudo dpkg -i llmchess_1.5.0_all.deb
 ```
 
 然后运行：

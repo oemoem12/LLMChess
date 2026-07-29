@@ -51,13 +51,20 @@ Or run as a module:
 python -m llmchess
 ```
 
-### Option 2: DEB package (Ubuntu/Debian)
+### Option 2: npm (Node.js)
+```bash
+npm install -g llmchess
+llmchess
+```
+The npm wrapper will auto-install the Python `llmchess` package on first run.
+
+### Option 3: DEB package (Ubuntu/Debian)
 ```bash
 sudo dpkg -i llmchess_1.5.0_all.deb
 ```
 The launcher will auto-install missing Python dependencies (PyQt6, python-chess, httpx).
 
-### Option 3: From source
+### Option 4: From source
 ```bash
 git clone https://github.com/oemoem12/LLMChess.git
 cd LLMChess
