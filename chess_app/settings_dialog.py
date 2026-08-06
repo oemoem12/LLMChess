@@ -1,3 +1,8 @@
+"""
+Settings Dialog - LLM 连接设置
+支持白方/黑方独立配置，语言切换，云端 API 预设
+"""
+
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QComboBox, QLineEdit, QSpinBox,
     QDoubleSpinBox, QDialogButtonBox, QVBoxLayout, QGroupBox,
@@ -5,43 +10,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-from chess_app.llm_connector import LLMConfig, PERSONAS
-
-
-PRESET_CONFIGS = {
-    "Ollama (Default)": LLMConfig(
-        provider="ollama",
-        base_url="http://localhost:11434/v1",
-        model="qwen2.5:7b",
-        api_key="",
-        temperature=0.3,
-        max_tokens=512,
-    ),
-    "llama.cpp Server": LLMConfig(
-        provider="llamacpp",
-        base_url="http://localhost:8080/v1",
-        model="llama",
-        api_key="",
-        temperature=0.3,
-        max_tokens=512,
-    ),
-    "LM Studio": LLMConfig(
-        provider="lmstudio",
-        base_url="http://localhost:1234/v1",
-        model="local-model",
-        api_key="",
-        temperature=0.3,
-        max_tokens=512,
-    ),
-    "Custom": LLMConfig(
-        provider="custom",
-        base_url="http://localhost:8000/v1",
-        model="",
-        api_key="",
-        temperature=0.3,
-        max_tokens=512,
-    ),
-}
+from chess_app.llm_connector import LLMConfig, PERSONAS, PRESET_CONFIGS
+from chess_app.i18n import tr, get_language, set_language
 
 
 class LLMConfigWidget(QWidget):
@@ -53,48 +23,56 @@ class LLMConfigWidget(QWidget):
         layout = QVBoxLayout(self)
 
         # 预设
-        preset_group = QGroupBox("Preset Configuration")
+        preset_group = QGroupBox(tr("settings_preset_group"))
         preset_layout = QVBoxLayout(preset_group)
         self.preset_combo = QComboBox()
-        for name in PRESET_CONFIGS:
-            self.preset_combo.addItem(name)
-        self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
+        self.preset_combo.addItem(tr("preset_ollama"), "ollama")
+        self.preset_combo.addItem(tr("preset_llamacpp"), "llamacpp")
+        self.preset_combo.addItem(tr("preset_lmstudio"), "lmstudio")
+        self.preset_combo.addItem(tr("preset_openai"), "openai")
+        self.preset_combo.addItem(tr("preset_deepseek"), "deepseek")
+        self.preset_combo.addItem(tr("preset_custom"), "custom")
+        self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
         preset_layout.addWidget(self.preset_combo)
         layout.addWidget(preset_group)
 
         # 连接设置
-        settings_group = QGroupBox("Connection Settings")
+        settings_group = QGroupBox(tr("settings_connection_group"))
         form = QFormLayout(settings_group)
 
         self.provider_combo = QComboBox()
-        self.provider_combo.addItems(["ollama", "llamacpp", "lmstudio", "custom"])
+        self.provider_combo.addItems(["ollama", "llamacpp", "lmstudio", "openai", "deepseek", "custom"])
         self.provider_combo.currentTextChanged.connect(self._on_provider_changed)
-        form.addRow("Provider:", self.provider_combo)
+        form.addRow(tr("settings_provider"), self.provider_combo)
 
         self.base_url_edit = QLineEdit()
-        form.addRow("Base URL:", self.base_url_edit)
+        form.addRow(tr("settings_base_url"), self.base_url_edit)
 
         self.model_edit = QLineEdit()
-        form.addRow("Model Name:", self.model_edit)
+        form.addRow(tr("settings_model"), self.model_edit)
 
         self.api_key_edit = QLineEdit()
-        self.api_key_edit.setPlaceholderText("(leave empty if not needed)")
-        form.addRow("API Key:", self.api_key_edit)
+        self.api_key_edit.setPlaceholderText(tr("settings_api_key_hint"))
+        self.api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow(tr("settings_api_key"), self.api_key_edit)
 
         self.temperature_spin = QDoubleSpinBox()
         self.temperature_spin.setRange(0.0, 2.0)
         self.temperature_spin.setSingleStep(0.1)
-        form.addRow("Temperature:", self.temperature_spin)
+        form.addRow(tr("settings_temperature"), self.temperature_spin)
 
         self.max_tokens_spin = QSpinBox()
         self.max_tokens_spin.setRange(16, 4096)
-        form.addRow("Max Tokens:", self.max_tokens_spin)
+        form.addRow(tr("settings_max_tokens"), self.max_tokens_spin)
 
         # 人设
         self.persona_combo = QComboBox()
-        for name in PERSONAS:
-            self.persona_combo.addItem(name.title(), name)
-        form.addRow("AI Persona:", self.persona_combo)
+        self.persona_combo.addItem(tr("persona_default"), "default")
+        self.persona_combo.addItem(tr("persona_aggressive"), "aggressive")
+        self.persona_combo.addItem(tr("persona_defensive"), "defensive")
+        self.persona_combo.addItem(tr("persona_creative"), "creative")
+        self.persona_combo.addItem(tr("persona_teacher"), "teacher")
+        form.addRow(tr("settings_persona"), self.persona_combo)
 
         layout.addWidget(settings_group)
 
@@ -107,26 +85,21 @@ class LLMConfigWidget(QWidget):
         self.api_key_edit.setText(config.api_key)
         self.temperature_spin.setValue(config.temperature)
         self.max_tokens_spin.setValue(config.max_tokens)
-        # 人设
         if config.persona and config.persona in PERSONAS:
             idx = self.persona_combo.findData(config.persona)
             if idx >= 0:
                 self.persona_combo.setCurrentIndex(idx)
         else:
-            self.persona_combo.setCurrentIndex(0)  # default
+            self.persona_combo.setCurrentIndex(0)
 
-    def _on_preset_changed(self, name: str):
-        if name in PRESET_CONFIGS and name != "Custom":
-            self._apply_config(PRESET_CONFIGS[name])
+    def _on_preset_changed(self):
+        preset_key = self.preset_combo.currentData()
+        if preset_key and preset_key in PRESET_CONFIGS:
+            self._apply_config(LLMConfig(**PRESET_CONFIGS[preset_key]))
 
     def _on_provider_changed(self, provider: str):
-        preset_map = {
-            "ollama": "Ollama (Default)",
-            "llamacpp": "llama.cpp Server",
-            "lmstudio": "LM Studio",
-        }
-        if provider in preset_map and preset_map[provider] in PRESET_CONFIGS:
-            self._apply_config(PRESET_CONFIGS[preset_map[provider]])
+        if provider in PRESET_CONFIGS:
+            self._apply_config(LLMConfig(**PRESET_CONFIGS[provider]))
 
     def get_config(self) -> LLMConfig:
         return LLMConfig(
@@ -143,35 +116,47 @@ class LLMConfigWidget(QWidget):
 class SettingsDialog(QDialog):
     def __init__(self, current_config: LLMConfig, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("LLM Connection Settings")
+        self.setWindowTitle(tr("settings_title"))
         self.setMinimumWidth(560)
-        self.setMinimumHeight(560)
+        self.setMinimumHeight(600)
         self._current_config = current_config
-        self.config_black = LLMConfig()  # 默认黑方配置
+        self.config_black = LLMConfig()
+        self._language = get_language()
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
 
-        # Tab 切换白方/黑方配置（AI vs AI 模式用）
+        # 语言选择
+        lang_group = QGroupBox(tr("settings_language"))
+        lang_layout = QHBoxLayout(lang_group)
+        self.lang_combo = QComboBox()
+        self.lang_combo.addItem(tr("settings_language_en"), "en")
+        self.lang_combo.addItem(tr("settings_language_zh"), "zh")
+        idx = self.lang_combo.findData(self._language)
+        if idx >= 0:
+            self.lang_combo.setCurrentIndex(idx)
+        self.lang_combo.currentIndexChanged.connect(self._on_language_changed)
+        lang_layout.addWidget(self.lang_combo)
+        layout.addWidget(lang_group)
+
+        # Tab 切换白方/黑方配置
         self.tabs = QTabWidget()
 
-        # 白方 Tab
         self.white_widget = LLMConfigWidget(self._current_config, "White")
-        self.tabs.addTab(self.white_widget, "⬜ White (Player 1)")
+        self.tabs.addTab(self.white_widget, tr("settings_tab_white"))
 
-        # 黑方 Tab
         self.black_widget = LLMConfigWidget(self.config_black, "Black")
-        self.tabs.addTab(self.black_widget, "⬛ Black (Player 2)")
+        self.tabs.addTab(self.black_widget, tr("settings_tab_black"))
 
         layout.addWidget(self.tabs)
 
         # 测试
-        test_group = QGroupBox("Connection Test")
+        test_group = QGroupBox(tr("settings_test_group"))
         test_layout = QVBoxLayout(test_group)
 
         test_btn_layout = QHBoxLayout()
-        self.test_btn = QPushButton("Test Current Tab")
+        self.test_btn = QPushButton(tr("settings_test_btn"))
         self.test_btn.clicked.connect(self._on_test_current)
         test_btn_layout.addWidget(self.test_btn)
         test_layout.addLayout(test_btn_layout)
@@ -192,6 +177,17 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def _on_language_changed(self):
+        new_lang = self.lang_combo.currentData()
+        if new_lang and new_lang != self._language:
+            self._language = new_lang
+            set_language(new_lang)
+            # 更新 UI 文本
+            self.setWindowTitle(tr("settings_title"))
+            self.tabs.setTabText(0, tr("settings_tab_white"))
+            self.tabs.setTabText(1, tr("settings_tab_black"))
+            self.test_btn.setText(tr("settings_test_btn"))
+
     def _on_test_current(self):
         config = self.get_config()
         from chess_app.llm_connector import LLMConnector
@@ -205,13 +201,14 @@ class SettingsDialog(QDialog):
             connector.close()
 
     def get_config(self) -> LLMConfig:
-        """获取当前 Tab 的配置"""
         if self.tabs.currentIndex() == 0:
             return self.white_widget.get_config()
         return self.black_widget.get_config()
 
+    def get_language(self) -> str:
+        return self._language
+
     def set_test_callback(self, callback):
-        """兼容旧 API（已内置 _on_test_current，可忽略）"""
         pass
 
     def set_test_status(self, success: bool, message: str):

@@ -1,13 +1,14 @@
-# LLM Chess ♟️🤖
+# LLM Chess ️🤖
 
 > Play chess against local LLMs, or watch two AIs battle each other — all in a beautiful dark-themed GUI.
 
 [![PyPI version](https://badge.fury.io/py/llmchess.svg)](https://pypi.org/project/llmchess/)
+[![npm version](https://badge.fury.io/js/llmchess.svg)](https://www.npmjs.com/package/llmchess)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/oemoem12/LLMChess)](https://github.com/oemoem12/LLMChess/releases)
 
-LLM Chess is a desktop application that lets you play international chess against AI opponents powered by **local large language models**. No cloud, no API keys, no GPU required — just a local LLM server (Ollama, llama.cpp, LM Studio, or any OpenAI-compatible API).
+LLM Chess is a desktop application that lets you play international chess against AI opponents powered by **local or cloud large language models**. Supports Ollama, llama.cpp, LM Studio, OpenAI GPT, DeepSeek, and any OpenAI-compatible API.
 
 ## ✨ Features
 
@@ -60,7 +61,7 @@ The npm wrapper will auto-install the Python `llmchess` package on first run.
 
 ### Option 3: DEB package (Ubuntu/Debian)
 ```bash
-sudo dpkg -i llmchess_1.5.0_all.deb
+sudo dpkg -i llmchess_1.5.5_all.deb
 ```
 The launcher will auto-install missing Python dependencies (PyQt6, python-chess, httpx).
 

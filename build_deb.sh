@@ -3,7 +3,7 @@ set -e
 
 PKG_DIR="/tmp/llmchess_deb_pkg"
 PROJ_DIR="/home/cat/Documents/trae_projects/trae/LLMChess"
-VERSION="1.0.0"
+VERSION="1.5.5"
 DEB_FILE="$PROJ_DIR/llmchess_${VERSION}_all.deb"
 
 echo "=== Building LLM Chess DEB package ==="
@@ -17,16 +17,17 @@ mkdir -p "$PKG_DIR/usr/share/llmchess/chess_app"
 
 cat > "$PKG_DIR/DEBIAN/control" << EOF
 Package: llmchess
-Version: 1.0.0
+Version: 1.5.0
 Section: games
 Priority: optional
 Architecture: all
 Depends: python3 (>= 3.9)
 Recommends: python3-pyqt6, python3-chess, python3-httpx
 Maintainer: LLMChess <llmchess@example.com>
-Description: AI Chess - Play chess against local LLMs
+Description: AI Chess - Play chess against local LLMs (AI vs AI supported)
  LLM Chess lets you play international chess against AI opponents
- powered by local large language models (LLMs).
+ powered by local large language models (LLMs), or watch two
+ AIs play against each other.
  .
  Supports connecting to:
   - Ollama (http://localhost:11434)
@@ -40,6 +41,10 @@ Description: AI Chess - Play chess against local LLMs
   - Undo moves
   - Dark theme UI
   - FEN display and move history
+  - AI vs AI mode with independent LLM configs per side
+  - AI thinking/reasoning display panel
+  - Multiple AI personas (aggressive/defensive/creative/teacher)
+  - Adjustable AI vs AI speed with pause/step controls
  .
  Note: If Python dependencies are missing, the launcher will
  automatically attempt to install them via pip or apt.

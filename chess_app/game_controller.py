@@ -1,3 +1,8 @@
+"""
+Game Controller - 主窗口和游戏逻辑
+支持人机对弈和 AI 对弈模式，集成 i18n 双语支持
+"""
+
 import chess
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -10,6 +15,7 @@ from PyQt6.QtGui import QFont, QTextCursor, QColor
 from chess_app.board_widget import ChessBoardWidget
 from chess_app.llm_connector import LLMConnector, LLMConfig, LLMResponse
 from chess_app.settings_dialog import SettingsDialog
+from chess_app.i18n import tr, set_language, get_language
 
 
 # ============================================================================
@@ -21,15 +27,16 @@ class LLMWorker(QObject):
     finished = pyqtSignal(object)  # 发出 LLMResponse
     error = pyqtSignal(str)
 
-    def __init__(self, connector: LLMConnector, fen: str, legal_moves: list[str]):
+    def __init__(self, connector: LLMConnector, fen: str, legal_moves: list[str], side: str = ""):
         super().__init__()
         self.connector = connector
         self.fen = fen
         self.legal_moves = legal_moves
+        self.side = side
 
     def run(self):
         try:
-            response = self.connector.get_move(self.fen, self.legal_moves)
+            response = self.connector.get_move(self.fen, self.legal_moves, self.side)
             self.finished.emit(response)
         except Exception as e:
             self.error.emit(str(e))
@@ -43,19 +50,15 @@ class LLMWorker(QObject):
 MODE_HUMAN_VS_AI = "human_vs_ai"   # 人 vs AI
 MODE_AI_VS_AI = "ai_vs_ai"         # AI vs AI
 
-# 执方常量
-SIDE_WHITE = "white"
-SIDE_BLACK = "black"
-
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("LLM Chess - AI Opponent")
+        self.setWindowTitle(tr("app_title"))
         self.setMinimumSize(900, 640)
 
         # 状态
-        self._config_white = LLMConfig()  # 白方配置（AI vs AI 时使用）
+        self._config_white = LLMConfig()  # 白方配置
         self._config_black = LLMConfig()  # 黑方配置
         self._config = self._config_white  # 当前主配置（向后兼容）
         self._connector_white = LLMConnector(self._config_white)
@@ -63,7 +66,7 @@ class MainWindow(QMainWindow):
 
         self._worker_thread: QThread | None = None
         self._worker: LLMWorker | None = None
-        self._move_history: list[dict] = []  # 改为 dict 列表，记录每步的思考
+        self._move_history: list[dict] = []
 
         # 模式
         self._mode = MODE_HUMAN_VS_AI
@@ -87,19 +90,19 @@ class MainWindow(QMainWindow):
         left_panel.setSpacing(6)
 
         # 模式选择
-        mode_group = QGroupBox("Game Mode")
+        mode_group = QGroupBox(tr("mode_group"))
         mode_layout = QVBoxLayout(mode_group)
 
         self.mode_combo = QComboBox()
-        self.mode_combo.addItem("👤 Human vs AI", MODE_HUMAN_VS_AI)
-        self.mode_combo.addItem("🤖 AI vs AI (Watch)", MODE_AI_VS_AI)
+        self.mode_combo.addItem(tr("mode_human_vs_ai"), MODE_HUMAN_VS_AI)
+        self.mode_combo.addItem(tr("mode_ai_vs_ai"), MODE_AI_VS_AI)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(self.mode_combo)
 
         # 人类执方（仅在 Human vs AI 时可见）
         self.color_combo = QComboBox()
-        self.color_combo.addItem("White (You go first)")
-        self.color_combo.addItem("Black (AI goes first)")
+        self.color_combo.addItem(tr("color_white_first"))
+        self.color_combo.addItem(tr("color_black_first"))
         self.color_combo.currentIndexChanged.connect(self._on_color_changed)
         mode_layout.addWidget(self.color_combo)
 
@@ -113,21 +116,21 @@ class MainWindow(QMainWindow):
 
         # 控制按钮
         button_layout = QHBoxLayout()
-        self.new_game_btn = QPushButton("New Game")
+        self.new_game_btn = QPushButton(tr("btn_new_game"))
         self.new_game_btn.clicked.connect(self._start_new_game)
         button_layout.addWidget(self.new_game_btn)
 
-        self.settings_btn = QPushButton("Settings...")
+        self.settings_btn = QPushButton(tr("btn_settings"))
         self.settings_btn.clicked.connect(self._open_settings)
         button_layout.addWidget(self.settings_btn)
 
         # AI vs AI 控制
-        self.pause_btn = QPushButton("⏸ Pause")
+        self.pause_btn = QPushButton(tr("btn_pause"))
         self.pause_btn.clicked.connect(self._toggle_ai_vs_ai_pause)
         self.pause_btn.setVisible(False)
         button_layout.addWidget(self.pause_btn)
 
-        self.step_btn = QPushButton("⏭ Step")
+        self.step_btn = QPushButton(tr("btn_step"))
         self.step_btn.clicked.connect(self._ai_vs_ai_step)
         self.step_btn.setVisible(False)
         button_layout.addWidget(self.step_btn)
@@ -135,9 +138,9 @@ class MainWindow(QMainWindow):
         left_panel.addLayout(button_layout)
 
         # AI vs AI 速度控制
-        self.speed_group = QGroupBox("AI vs AI Speed")
+        self.speed_group = QGroupBox(tr("group_ai_vs_ai_speed"))
         speed_layout = QHBoxLayout(self.speed_group)
-        speed_layout.addWidget(QLabel("Delay:"))
+        speed_layout.addWidget(QLabel(tr("label_delay")))
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
         self.speed_slider.setMinimum(0)
         self.speed_slider.setMaximum(5000)
@@ -160,7 +163,7 @@ class MainWindow(QMainWindow):
         right_panel.setSpacing(6)
 
         # 走棋历史
-        move_group = QGroupBox("Move History")
+        move_group = QGroupBox(tr("group_move_history"))
         move_layout = QVBoxLayout(move_group)
         self.move_history_text = QTextEdit()
         self.move_history_text.setReadOnly(True)
@@ -170,7 +173,7 @@ class MainWindow(QMainWindow):
         right_panel.addWidget(move_group, 1)
 
         # AI 思考显示
-        self.thinking_group = QGroupBox("AI Thinking")
+        self.thinking_group = QGroupBox(tr("group_ai_thinking"))
         thinking_layout = QVBoxLayout(self.thinking_group)
         self.thinking_text = QTextEdit()
         self.thinking_text.setReadOnly(True)
@@ -184,9 +187,9 @@ class MainWindow(QMainWindow):
         right_panel.addWidget(self.thinking_group, 1)
 
         # 游戏状态
-        info_group = QGroupBox("Game Status")
+        info_group = QGroupBox(tr("group_game_status"))
         info_layout = QVBoxLayout(info_group)
-        self.status_label = QLabel("Ready. Make your move.")
+        self.status_label = QLabel(tr("status_ready"))
         self.status_label.setWordWrap(True)
         self.status_label.setFont(QFont("Segoe UI", 10))
         info_layout.addWidget(self.status_label)
@@ -197,13 +200,48 @@ class MainWindow(QMainWindow):
         self.fen_label.setStyleSheet("color: #888;")
         info_layout.addWidget(self.fen_label)
 
-        self.undo_btn = QPushButton("Undo Last Move")
+        self.undo_btn = QPushButton(tr("btn_undo"))
         self.undo_btn.clicked.connect(self._undo_move)
         info_layout.addWidget(self.undo_btn)
 
         right_panel.addWidget(info_group)
 
         main_layout.addLayout(right_panel)
+
+    # ------------------------------------------------------------------
+    # 语言切换
+    # ------------------------------------------------------------------
+
+    def _update_ui_language(self):
+        """更新所有 UI 文本为当前语言"""
+        self.setWindowTitle(tr("app_title"))
+        self.new_game_btn.setText(tr("btn_new_game"))
+        self.settings_btn.setText(tr("btn_settings"))
+        self.pause_btn.setText(tr("btn_pause") if not self._ai_vs_ai_paused else tr("btn_resume"))
+        self.step_btn.setText(tr("btn_step"))
+        self.undo_btn.setText(tr("btn_undo"))
+
+        # 更新 GroupBox 标题
+        for group in self.findChildren(QGroupBox):
+            title = group.title()
+            if "Game Mode" in title or "游戏模式" in title:
+                group.setTitle(tr("mode_group"))
+            elif "Move History" in title or "走棋历史" in title:
+                group.setTitle(tr("group_move_history"))
+            elif "AI Thinking" in title or "AI 思考" in title:
+                group.setTitle(tr("group_ai_thinking"))
+            elif "Game Status" in title or "游戏状态" in title:
+                group.setTitle(tr("group_game_status"))
+            elif "Speed" in title or "速度" in title:
+                group.setTitle(tr("group_ai_vs_ai_speed"))
+
+        # 更新下拉框
+        self.mode_combo.setItemText(0, tr("mode_human_vs_ai"))
+        self.mode_combo.setItemText(1, tr("mode_ai_vs_ai"))
+        self.color_combo.setItemText(0, tr("color_white_first"))
+        self.color_combo.setItemText(1, tr("color_black_first"))
+
+        self._update_status()
 
     # ------------------------------------------------------------------
     # 模式切换
@@ -219,7 +257,7 @@ class MainWindow(QMainWindow):
             self.pause_btn.setVisible(True)
             self.step_btn.setVisible(True)
             self.speed_group.setVisible(True)
-            self.board_widget.set_player_color(None)  # AI vs AI 不需要玩家
+            self.board_widget.set_player_color(None)
         else:
             self.color_combo.setVisible(True)
             self.undo_btn.setVisible(True)
@@ -255,7 +293,7 @@ class MainWindow(QMainWindow):
         # 启动 AI 走棋
         if self._mode == MODE_AI_VS_AI:
             self._ai_vs_ai_active = True
-            self.pause_btn.setText("⏸ Pause")
+            self.pause_btn.setText(tr("btn_pause"))
             QTimer.singleShot(500, self._ai_vs_ai_step)
         else:
             player_color = self.board_widget._player_color
@@ -263,7 +301,6 @@ class MainWindow(QMainWindow):
                 self._request_llm_move(chess.WHITE)
 
     def _on_color_changed(self):
-        # 模式切换时也会触发，避免双重启动
         if self._mode == MODE_HUMAN_VS_AI:
             self._start_new_game()
 
@@ -271,7 +308,6 @@ class MainWindow(QMainWindow):
         if self._mode != MODE_HUMAN_VS_AI:
             return
 
-        # 用户走棋时清空思考面板
         self.thinking_text.clear()
 
         board = self.board_widget.board
@@ -309,10 +345,10 @@ class MainWindow(QMainWindow):
             return
 
         connector = self._get_connector_for_color(color)
-        side_name = "White" if color == chess.WHITE else "Black"
+        side_name = tr("white") if color == chess.WHITE else tr("black")
         model_name = self._get_config_for_color(color).model
 
-        self.status_label.setText(f"{side_name} AI ({model_name}) is thinking...")
+        self.status_label.setText(tr("status_thinking", side=side_name, model=model_name))
         self.board_widget.setEnabled(False)
         self.new_game_btn.setEnabled(False)
         self.settings_btn.setEnabled(False)
@@ -325,8 +361,9 @@ class MainWindow(QMainWindow):
 
         QApplication.processEvents()
 
+        side = "white" if color == chess.WHITE else "black"
         self._worker_thread = QThread()
-        self._worker = LLMWorker(connector, board.fen(), legal_moves)
+        self._worker = LLMWorker(connector, board.fen(), legal_moves, side)
         self._worker.moveToThread(self._worker_thread)
 
         self._worker.finished.connect(self._on_llm_move)
@@ -340,7 +377,7 @@ class MainWindow(QMainWindow):
     def _on_llm_move(self, response: LLMResponse):
         move_uci = response.move
         color = self.board_widget.board.turn
-        side_name = "White" if color == chess.WHITE else "Black"
+        side_name = tr("white") if color == chess.WHITE else tr("black")
 
         if move_uci:
             try:
@@ -379,7 +416,6 @@ class MainWindow(QMainWindow):
             self._update_status()
             if self.board_widget.board.is_game_over():
                 return
-            # 如果轮到玩家，启用棋盘；否则请求 LLM
             if self.board_widget.board.turn == self.board_widget._player_color:
                 self.board_widget.setEnabled(True)
             else:
@@ -390,11 +426,10 @@ class MainWindow(QMainWindow):
         self._cleanup_worker()
 
         QMessageBox.warning(
-            self, "AI Error",
-            f"Failed to get move from LLM:\n\n{error_msg}\n\n"
-            "Please check your LLM connection settings and ensure the server is running."
+            self, tr("error_ai_title"),
+            tr("error_ai_body", error=error_msg)
         )
-        self.status_label.setText(f"Error: {error_msg[:100]}")
+        self.status_label.setText(tr("error_status", error=error_msg[:100]))
         self._ai_vs_ai_active = False
 
     def _restore_ui(self):
@@ -429,7 +464,7 @@ class MainWindow(QMainWindow):
         if self.board_widget.board.is_game_over():
             return
         if self._worker_thread is not None:
-            return  # 已经在跑
+            return
 
         color = self.board_widget.board.turn
         self._request_llm_move(color)
@@ -437,9 +472,9 @@ class MainWindow(QMainWindow):
     def _toggle_ai_vs_ai_pause(self):
         self._ai_vs_ai_paused = not self._ai_vs_ai_paused
         if self._ai_vs_ai_paused:
-            self.pause_btn.setText("▶ Resume")
+            self.pause_btn.setText(tr("btn_resume"))
         else:
-            self.pause_btn.setText("⏸ Pause")
+            self.pause_btn.setText(tr("btn_pause"))
             if not self.board_widget.board.is_game_over():
                 QTimer.singleShot(100, self._ai_vs_ai_step)
 
@@ -450,21 +485,20 @@ class MainWindow(QMainWindow):
     def _append_thinking(self, side_name: str, response: LLMResponse):
         """把 AI 的思考追加到思考面板"""
         config = self._get_config_for_color(
-            chess.WHITE if side_name == "White" else chess.BLACK
+            chess.WHITE if side_name == tr("white") else chess.BLACK
         )
 
-        header = f"━━━ {side_name} AI ({config.model}) ━━━\n"
-        move_line = f"➤ Move: {response.move}"
+        header = tr("thinking_header", side=side_name, model=config.model) + "\n"
+        move_line = tr("thinking_move", move=response.move)
         if response.used_fallback:
-            move_line += "  [fallback]"
+            move_line += tr("thinking_fallback")
         move_line += "\n"
 
-        reasoning = response.reasoning or "(no reasoning provided)"
+        reasoning = response.reasoning or tr("thinking_no_reasoning")
         if len(reasoning) > 800:
             reasoning = reasoning[:800] + "..."
 
-        # 用 HTML 让白方/黑方用不同颜色
-        if side_name == "White":
+        if side_name == tr("white"):
             color = "#89B4FA"
         else:
             color = "#F38BA8"
@@ -493,48 +527,47 @@ class MainWindow(QMainWindow):
 
     def _update_status(self):
         board = self.board_widget.board
-        self.fen_label.setText(f"FEN: {board.fen()}")
+        self.fen_label.setText(f"{tr('fen_label')} {board.fen()}")
 
         if board.is_game_over():
             result = board.result()
             if result == "1-0":
-                msg = "Game Over - White Wins!"
+                msg = tr("game_over_white_wins")
             elif result == "0-1":
-                msg = "Game Over - Black Wins!"
+                msg = tr("game_over_black_wins")
             elif result == "1/2-1/2":
-                msg = "Game Over - It's a Draw!"
+                msg = tr("game_over_draw")
             else:
-                msg = f"Game Over - {result}"
+                msg = tr("game_over_result", result=result)
 
             if board.is_checkmate():
-                msg += " (Checkmate)"
+                msg += tr("end_checkmate")
             elif board.is_stalemate():
-                msg += " (Stalemate)"
+                msg += tr("end_stalemate")
             elif board.is_insufficient_material():
-                msg += " (Insufficient Material)"
+                msg += tr("end_insufficient")
             elif board.is_fifty_moves():
-                msg += " (50-Move Rule)"
+                msg += tr("end_fifty_moves")
             elif board.is_repetition():
-                msg += " (Threefold Repetition)"
+                msg += tr("end_repetition")
 
             self.status_label.setText(msg)
             self.status_label.setStyleSheet("color: #F44336; font-weight: bold;")
             self._ai_vs_ai_active = False
         elif board.is_check():
-            self.status_label.setText(
-                f"{'White' if board.turn == chess.WHITE else 'Black'} is in check!"
-            )
+            side = tr("white") if board.turn == chess.WHITE else tr("black")
+            self.status_label.setText(tr("status_check", side=side))
             self.status_label.setStyleSheet("color: #FF9800; font-weight: bold;")
         else:
             if self._mode == MODE_AI_VS_AI:
-                side = "White" if board.turn == chess.WHITE else "Black"
+                side = tr("white") if board.turn == chess.WHITE else tr("black")
                 model = self._get_config_for_color(board.turn).model
-                self.status_label.setText(f"{side} AI ({model}) to move...")
+                self.status_label.setText(tr("status_to_move", side=side, model=model))
                 self.status_label.setStyleSheet("color: #89B4FA; font-weight: normal;")
             else:
-                turn = "Your" if board.turn == self.board_widget._player_color else "AI's"
-                color_name = "White" if board.turn == chess.WHITE else "Black"
-                self.status_label.setText(f"{color_name}'s turn ({turn} turn)")
+                turn = tr("your") if board.turn == self.board_widget._player_color else tr("ai")
+                color_name = tr("white") if board.turn == chess.WHITE else tr("black")
+                self.status_label.setText(tr("status_your_turn" if turn == tr("your") else "status_ai_turn", color=color_name))
                 self.status_label.setStyleSheet("color: #4CAF50; font-weight: normal;")
 
     def _update_history_display(self):
@@ -586,21 +619,17 @@ class MainWindow(QMainWindow):
     def _get_config_for_color(self, color: chess.Color) -> LLMConfig:
         if self._mode == MODE_AI_VS_AI:
             return self._config_white if color == chess.WHITE else self._config_black
-        # Human vs AI 模式下：玩家用 white/black（默认黑方）由玩家执方决定
         player_color = self.board_widget._player_color
         if player_color is None:
             return self._config_white
         if player_color == chess.WHITE:
-            # 玩家执白，AI 执黑
             return self._config_black
         else:
-            # 玩家执黑，AI 执白
             return self._config_white
 
     def _get_connector_for_color(self, color: chess.Color) -> LLMConnector:
         if self._mode == MODE_AI_VS_AI:
             return self._connector_white if color == chess.WHITE else self._connector_black
-        # Human vs AI
         player_color = self.board_widget._player_color
         if player_color == chess.WHITE:
             return self._connector_black
@@ -631,14 +660,20 @@ class MainWindow(QMainWindow):
     def _open_settings(self):
         dlg = SettingsDialog(self._config_white, self)
         dlg.set_test_callback(lambda: self._test_connection(dlg))
-        dlg.config_black = self._config_black  # AI vs AI 时也支持配置黑方
+        dlg.config_black = self._config_black
         if dlg.exec() == SettingsDialog.DialogCode.Accepted:
             self._config_white = dlg.get_config()
             self._config_black = getattr(dlg, 'config_black', LLMConfig())
-            # 默认：Human vs AI 模式用白方配置
             self._config = self._config_white
             self._connector_white = LLMConnector(self._config_white)
             self._connector_black = LLMConnector(self._config_black)
+
+            # 检查语言是否改变
+            new_lang = dlg.get_language()
+            if new_lang != get_language():
+                set_language(new_lang)
+                self._update_ui_language()
+
             self._start_new_game()
 
     def _test_connection(self, dlg: SettingsDialog):

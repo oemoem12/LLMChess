@@ -69,7 +69,7 @@ llmchess
 或者 Ubuntu/Debian 用户可以直接下载 DEB 包：
 
 ```bash
-sudo dpkg -i llmchess_1.5.0_all.deb
+sudo dpkg -i llmchess_1.5.5_all.deb
 ```
 
 然后运行：

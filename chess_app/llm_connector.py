@@ -1,9 +1,19 @@
+"""
+LLM Connector - 连接本地/云端 LLM 服务
+支持 Ollama / llama.cpp / LM Studio / OpenAI / DeepSeek / 自定义 OpenAI 兼容 API
+"""
+
 import re
 import json
+import time
 import httpx
 from dataclasses import dataclass, field
 from typing import Optional
 
+
+# ============================================================================
+# 配置
+# ============================================================================
 
 @dataclass
 class LLMConfig:
@@ -14,11 +24,49 @@ class LLMConfig:
     temperature: float = 0.3
     max_tokens: int = 512
     timeout: float = 60.0
-    # 自定义 AI 思考风格（可选）。不同的"角色"会有不同的语气/策略。
     persona: str = ""
+    # 云端 API 专用
+    org_id: str = ""          # OpenAI 组织 ID（可选）
+    project_id: str = ""      # OpenAI 项目 ID（可选）
 
 
-# 不同的 AI 人设：影响思考展示风格
+# ============================================================================
+# 预设配置
+# ============================================================================
+
+PRESET_CONFIGS = {
+    "ollama": {
+        "provider": "ollama",
+        "base_url": "http://localhost:11434/v1",
+        "model": "qwen2.5:7b",
+    },
+    "llamacpp": {
+        "provider": "llamacpp",
+        "base_url": "http://localhost:8080/v1",
+        "model": "llama",
+    },
+    "lmstudio": {
+        "provider": "lmstudio",
+        "base_url": "http://localhost:1234/v1",
+        "model": "local-model",
+    },
+    "openai": {
+        "provider": "openai",
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini",
+    },
+    "deepseek": {
+        "provider": "deepseek",
+        "base_url": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat",
+    },
+}
+
+
+# ============================================================================
+# AI 人设
+# ============================================================================
+
 PERSONAS = {
     "default": "You are a calm, professional chess engine.",
     "aggressive": "You are an aggressive chess player who loves attacks and sacrifices.",
@@ -51,60 +99,116 @@ Legal moves available: {legal_moves}
 """
 
 
+# ============================================================================
+# 响应
+# ============================================================================
+
 @dataclass
 class LLMResponse:
     """LLM 的完整响应：包含思考过程和最终着法"""
-    move: Optional[str]  # UCI 着法
-    reasoning: str       # AI 的思考/解释
-    raw: str             # 原始返回内容
-    used_fallback: bool = False  # 是否使用了回退（无着法时取第一个合法着法）
+    move: Optional[str]
+    reasoning: str
+    raw: str
+    used_fallback: bool = False
+    side: str = ""  # "white" / "black"
 
+
+# ============================================================================
+# Connector
+# ============================================================================
 
 class LLMConnector:
+    """
+    连接 LLM 服务。每个实例拥有独立的 httpx.Client，
+    确保 AI vs AI 模式下两个 connector 互不干扰。
+    """
+
     def __init__(self, config: Optional[LLMConfig] = None):
         self.config = config or LLMConfig()
         self._client: Optional[httpx.Client] = None
+        self._request_counter = 0  # 用于调试/日志
 
     @property
     def client(self) -> httpx.Client:
+        """懒加载，每个 connector 实例独立创建"""
         if self._client is None:
-            self._client = httpx.Client(timeout=self.config.timeout)
+            self._client = httpx.Client(
+                timeout=self.config.timeout,
+                # 关键修复：禁用连接池复用，防止 AI vs AI 同模型时串扰
+                limits=httpx.Limits(max_connections=1, max_keepalive_connections=0),
+            )
         return self._client
+
+    # ------------------------------------------------------------------
+    # 端点
+    # ------------------------------------------------------------------
+
+    def _get_chat_endpoint(self) -> str:
+        base = self.config.base_url.rstrip("/")
+        provider = self.config.provider
+        if provider == "ollama" and "/v1" not in base:
+            base += "/v1"
+        return f"{base}/chat/completions"
+
+    # ------------------------------------------------------------------
+    # 请求头
+    # ------------------------------------------------------------------
+
+    def _build_headers(self) -> dict:
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        key = self.config.api_key
+        provider = self.config.provider
+
+        if key:
+            if provider in ("openai", "deepseek"):
+                headers["Authorization"] = f"Bearer {key}"
+            else:
+                headers["Authorization"] = f"Bearer {key}"
+
+        # OpenAI 可选 org/project
+        if provider == "openai":
+            if self.config.org_id:
+                headers["OpenAI-Organization"] = self.config.org_id
+            if self.config.project_id:
+                headers["OpenAI-Project"] = self.config.project_id
+
+        return headers
+
+    # ------------------------------------------------------------------
+    # 提示词
+    # ------------------------------------------------------------------
 
     def _get_persona(self) -> str:
         if self.config.persona and self.config.persona in PERSONAS:
             return PERSONAS[self.config.persona]
         if self.config.persona:
-            # 自定义人设
             return f"You are a chess player with this style: {self.config.persona}"
         return PERSONAS["default"]
 
     def _build_prompt(self, fen: str, legal_moves: list[str]) -> str:
-        moves_str = ", ".join(legal_moves)
-        persona = self._get_persona()
         return SYSTEM_PROMPT.format(
             fen=fen,
-            legal_moves=moves_str,
-            persona=persona,
+            legal_moves=", ".join(legal_moves),
+            persona=self._get_persona(),
         )
 
-    def _get_chat_endpoint(self) -> str:
-        base = self.config.base_url.rstrip("/")
-        if self.config.provider == "ollama" and "/v1" not in base:
-            base += "/v1"
-        return f"{base}/chat/completions"
-
     def _build_request_body(self, fen: str, legal_moves: list[str]) -> dict:
-        prompt = self._build_prompt(fen, legal_moves)
         return {
             "model": self.config.model,
             "messages": [
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": self._build_prompt(fen, legal_moves)}
             ],
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens,
             "stream": False,
         }
+
+    # ------------------------------------------------------------------
+    # 响应解析
+    # ------------------------------------------------------------------
 
     def _parse_response(
         self, content: str, legal_moves: list[str]
@@ -131,7 +235,7 @@ class LLMConnector:
             if candidate in legal_moves:
                 move = candidate
 
-        # 2. 如果没找到 Move: 前缀，用 UCI 正则全局搜索
+        # 2. 全局 UCI 正则搜索
         if move is None:
             uci_pattern = re.compile(
                 r'\b([a-h][1-8][a-h][1-8][qrbn]?)\b', re.IGNORECASE
@@ -150,14 +254,12 @@ class LLMConnector:
                     move = m
                     break
 
-        # 4. 如果仍然没有 reasoning，但内容比较长，就把前半部分当 reasoning
+        # 4. 提取剩余内容为 reasoning
         if not reasoning and len(content) > 30:
-            # 去掉 Move 行后剩下的内容
             cleaned = re.sub(
                 r'(?:^|\n)\s*(?:Move|Answer|My move|My answer)\s*[:：].*$',
                 '', content, flags=re.IGNORECASE,
             ).strip()
-            # 去掉开头的 "Reasoning: ..."
             cleaned = re.sub(
                 r'^\s*(?:Reasoning|Analysis|Think|Thought)\s*[:：]\s*',
                 '', cleaned, flags=re.IGNORECASE,
@@ -166,16 +268,23 @@ class LLMConnector:
 
         return move, reasoning
 
+    # ------------------------------------------------------------------
+    # 核心：获取着法
+    # ------------------------------------------------------------------
+
     def get_move(
-        self, fen: str, legal_moves: list[str]
+        self, fen: str, legal_moves: list[str], side: str = ""
     ) -> LLMResponse:
-        """请求 LLM 下一步棋，返回完整响应（包含思考）"""
+        """
+        请求 LLM 下一步棋。
+        side: "white" / "black" — 用于日志和调试，区分 AI vs AI 的两个请求
+        """
+        self._request_counter += 1
+        req_id = self._request_counter
+
         body = self._build_request_body(fen, legal_moves)
         endpoint = self._get_chat_endpoint()
-
-        headers = {"Content-Type": "application/json"}
-        if self.config.api_key:
-            headers["Authorization"] = f"Bearer {self.config.api_key}"
+        headers = self._build_headers()
 
         try:
             response = self.client.post(
@@ -183,14 +292,14 @@ class LLMConnector:
             )
             response.raise_for_status()
         except httpx.HTTPError as e:
-            raise ConnectionError(f"LLM request failed: {e}")
+            raise ConnectionError(f"LLM request failed (req#{req_id}, side={side}): {e}")
 
         data = response.json()
         try:
             content = data["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError):
             raise ValueError(
-                f"Unexpected API response format: {json.dumps(data, indent=2)[:500]}"
+                f"Unexpected API response (req#{req_id}): {json.dumps(data, indent=2)[:500]}"
             )
 
         move, reasoning = self._parse_response(content, legal_moves)
@@ -201,7 +310,7 @@ class LLMConnector:
                 move = legal_moves[0]
                 used_fallback = True
                 reasoning = (
-                    reasoning or f"[LLM 返回无效，已回退到第一个合法着法 {move}]"
+                    reasoning or f"[LLM returned invalid, fell back to first legal move {move}]"
                 )
             else:
                 raise ValueError("No legal moves available")
@@ -211,7 +320,12 @@ class LLMConnector:
             reasoning=reasoning,
             raw=content,
             used_fallback=used_fallback,
+            side=side,
         )
+
+    # ------------------------------------------------------------------
+    # 连接测试
+    # ------------------------------------------------------------------
 
     def test_connection(self) -> tuple[bool, str]:
         endpoint = self._get_chat_endpoint()
@@ -223,9 +337,7 @@ class LLMConnector:
             "temperature": 0,
             "max_tokens": 16,
         }
-        headers = {"Content-Type": "application/json"}
-        if self.config.api_key:
-            headers["Authorization"] = f"Bearer {self.config.api_key}"
+        headers = self._build_headers()
 
         try:
             response = self.client.post(
@@ -241,6 +353,10 @@ class LLMConnector:
             return False, f"HTTP error {e.response.status_code}: {e.response.text[:300]}"
         except Exception as e:
             return False, f"Connection test failed: {e}"
+
+    # ------------------------------------------------------------------
+    # 清理
+    # ------------------------------------------------------------------
 
     def close(self):
         if self._client:
