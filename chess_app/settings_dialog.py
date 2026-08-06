@@ -178,15 +178,15 @@ class SettingsDialog(QDialog):
         layout.addWidget(buttons)
 
     def _on_language_changed(self):
+        """语言切换预览（不立即应用，等用户点 OK 才生效）"""
         new_lang = self.lang_combo.currentData()
         if new_lang and new_lang != self._language:
-            self._language = new_lang
-            set_language(new_lang)
-            # 更新 UI 文本
+            # 只更新当前对话框的 UI 文本作为预览
             self.setWindowTitle(tr("settings_title"))
             self.tabs.setTabText(0, tr("settings_tab_white"))
             self.tabs.setTabText(1, tr("settings_tab_black"))
             self.test_btn.setText(tr("settings_test_btn"))
+            # 注意：不调用 set_language()，等用户点 OK 后才全局生效
 
     def _on_test_current(self):
         config = self.get_config()
@@ -201,8 +201,17 @@ class SettingsDialog(QDialog):
             connector.close()
 
     def get_config(self) -> LLMConfig:
+        """返回当前 tab 的配置（向后兼容）"""
         if self.tabs.currentIndex() == 0:
             return self.white_widget.get_config()
+        return self.black_widget.get_config()
+
+    def get_white_config(self) -> LLMConfig:
+        """返回白方配置"""
+        return self.white_widget.get_config()
+
+    def get_black_config(self) -> LLMConfig:
+        """返回黑方配置"""
         return self.black_widget.get_config()
 
     def get_language(self) -> str:

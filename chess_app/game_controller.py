@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
         self._worker_thread: QThread | None = None
         self._worker: LLMWorker | None = None
         self._move_history: list[dict] = []
+        self._pending_request: bool = False  # 防止重复请求
 
         # 模式
         self._mode = MODE_HUMAN_VS_AI
@@ -344,6 +345,9 @@ class MainWindow(QMainWindow):
         if not legal_moves:
             return
 
+        # 修复 Bug 4: 先清理旧线程，防止线程泄漏
+        self._cleanup_worker()
+
         connector = self._get_connector_for_color(color)
         side_name = tr("white") if color == chess.WHITE else tr("black")
         model_name = self._get_config_for_color(color).model
@@ -377,7 +381,6 @@ class MainWindow(QMainWindow):
     def _on_llm_move(self, response: LLMResponse):
         move_uci = response.move
         color = self.board_widget.board.turn
-        side_name = tr("white") if color == chess.WHITE else tr("black")
 
         if move_uci:
             try:
@@ -397,7 +400,7 @@ class MainWindow(QMainWindow):
 
             self.board_widget.LLM_play_move(move_uci)
             self._update_history_display()
-            self._append_thinking(side_name, response)
+            self._append_thinking(color, response)
 
         self._cleanup_worker()
 
@@ -482,11 +485,10 @@ class MainWindow(QMainWindow):
     # 思考显示
     # ------------------------------------------------------------------
 
-    def _append_thinking(self, side_name: str, response: LLMResponse):
+    def _append_thinking(self, color: chess.Color, response: LLMResponse):
         """把 AI 的思考追加到思考面板"""
-        config = self._get_config_for_color(
-            chess.WHITE if side_name == tr("white") else chess.BLACK
-        )
+        config = self._get_config_for_color(color)
+        side_name = tr("white") if color == chess.WHITE else tr("black")
 
         header = tr("thinking_header", side=side_name, model=config.model) + "\n"
         move_line = tr("thinking_move", move=response.move)
@@ -498,14 +500,11 @@ class MainWindow(QMainWindow):
         if len(reasoning) > 800:
             reasoning = reasoning[:800] + "..."
 
-        if side_name == tr("white"):
-            color = "#89B4FA"
-        else:
-            color = "#F38BA8"
+        color_hex = "#89B4FA" if color == chess.WHITE else "#F38BA8"
 
         html = (
             f'<div style="margin-bottom: 10px;">'
-            f'<div style="color: {color}; font-weight: bold;">{header}</div>'
+            f'<div style="color: {color_hex}; font-weight: bold;">{header}</div>'
             f'<div style="color: #CDD6F4; margin: 4px 0;">'
             f'{self._html_escape(move_line)}</div>'
             f'<div style="color: #A6ADC8; font-style: italic;">'
@@ -565,9 +564,10 @@ class MainWindow(QMainWindow):
                 self.status_label.setText(tr("status_to_move", side=side, model=model))
                 self.status_label.setStyleSheet("color: #89B4FA; font-weight: normal;")
             else:
-                turn = tr("your") if board.turn == self.board_widget._player_color else tr("ai")
+                is_human_turn = (board.turn == self.board_widget._player_color)
                 color_name = tr("white") if board.turn == chess.WHITE else tr("black")
-                self.status_label.setText(tr("status_your_turn" if turn == tr("your") else "status_ai_turn", color=color_name))
+                key = "status_your_turn" if is_human_turn else "status_ai_turn"
+                self.status_label.setText(tr(key, color=color_name))
                 self.status_label.setStyleSheet("color: #4CAF50; font-weight: normal;")
 
     def _update_history_display(self):
@@ -662,8 +662,9 @@ class MainWindow(QMainWindow):
         dlg.set_test_callback(lambda: self._test_connection(dlg))
         dlg.config_black = self._config_black
         if dlg.exec() == SettingsDialog.DialogCode.Accepted:
-            self._config_white = dlg.get_config()
-            self._config_black = getattr(dlg, 'config_black', LLMConfig())
+            # 修复 Bug 1: 分别获取白方和黑方配置，而不是只取当前 tab
+            self._config_white = dlg.get_white_config()
+            self._config_black = dlg.get_black_config()
             self._config = self._config_white
             self._connector_white = LLMConnector(self._config_white)
             self._connector_black = LLMConnector(self._config_black)
